@@ -12,13 +12,17 @@ const (
 	OneTimeAuthMask byte = 0x10
 	AddrMask        byte = 0xf
 )
-
+type TrafficListener interface {
+	WhenIn(len int)
+	WhenOut(len int)
+}
 type Conn struct {
 	net.Conn
 	*Cipher
 	readBuf  []byte
 	writeBuf []byte
 	chunkId  uint32
+	TrafficListener
 }
 
 func NewConn(c net.Conn, cipher *Cipher) *Conn {
@@ -114,6 +118,9 @@ func (c *Conn) GetAndIncrChunkId() (chunkId uint32) {
 }
 
 func (c *Conn) Read(b []byte) (n int, err error) {
+	if c.TrafficListener != nil {
+		c.TrafficListener.WhenIn(len(b))
+	}
 	if c.dec == nil {
 		iv := make([]byte, c.info.ivLen)
 		if _, err = io.ReadFull(c.Conn, iv); err != nil {
@@ -142,6 +149,9 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 }
 
 func (c *Conn) Write(b []byte) (n int, err error) {
+	if c.TrafficListener != nil {
+		c.TrafficListener.WhenIn(len(b))
+	}
 	nn := len(b)
 	if c.ota {
 		chunkId := c.GetAndIncrChunkId()
